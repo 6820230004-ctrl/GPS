@@ -1,0 +1,253 @@
+
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Location-based AR - Lab 3</title>
+
+  <!-- ห้ามแก้เวอร์ชันตามโจทย์ Lab -->
+  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.8/aframe/build/aframe-ar.js"></script>
+
+  <script>
+    // ทำให้ป้ายข้อความหันเข้าหากล้อง
+    AFRAME.registerComponent('face-me', {
+      tick: function () {
+        const cam = this.el.sceneEl.camera;
+        if (!cam) return;
+
+        const me = new THREE.Vector3();
+        const target = new THREE.Vector3();
+
+        this.el.object3D.getWorldPosition(me);
+        cam.getWorldPosition(target);
+
+        target.y = me.y;
+        this.el.object3D.lookAt(target);
+      }
+    });
+  </script>
+
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: system-ui, sans-serif;
+    }
+
+    #hud {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      right: 10px;
+      z-index: 10;
+      background: rgba(42, 27, 92, 0.85);
+      color: white;
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    #hud b {
+      color: #FFCE54;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div id="hud">
+    กำลังตรวจสอบตำแหน่ง GPS...
+    <br>
+    กรุณาอนุญาตกล้องและตำแหน่ง
+  </div>
+
+  <a-scene
+    vr-mode-ui="enabled: false"
+    embedded
+    arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false"
+    renderer="antialias: true; alpha: true">
+
+    <!-- กล้อง GPS -->
+    <a-camera gps-new-camera="gpsMinDistance: 5"></a-camera>
+
+    <!-- จุด A : กล่องสีม่วง -->
+    <a-entity
+      data-name="จุด A"
+      gps-new-entity-place="latitude: 0.0003; longitude: 0">
+
+      <a-box
+        color="#5A3EBD"
+        scale="4 4 4"
+        position="0 2 0"
+        animation="property: rotation;
+                   to: 0 360 0;
+                   loop: true;
+                   dur: 8000;
+                   easing: linear">
+      </a-box>
+
+      <a-text
+        face-me
+        value="POINT A"
+        align="center"
+        color="#FFFFFF"
+        width="40"
+        position="0 6 0">
+      </a-text>
+
+    </a-entity>
+
+    <!-- จุด B : ลูกบอลสีชมพู -->
+    <a-entity
+      data-name="จุด B"
+      gps-new-entity-place="latitude: 0; longitude: 0.0003">
+
+      <a-sphere
+        color="#FF78AA"
+        radius="2.5"
+        position="0 2.5 0"
+        animation="property: rotation;
+                   to: 360 360 0;
+                   loop: true;
+                   dur: 6000">
+      </a-sphere>
+
+      <a-text
+        face-me
+        value="POINT B"
+        align="center"
+        color="#FFFFFF"
+        width="40"
+        position="0 7 0">
+      </a-text>
+
+    </a-entity>
+
+    <!-- จุด C : ป้ายต้อนรับ -->
+    <a-entity
+      data-name="จุด C"
+      gps-new-entity-place="latitude: -0.0003; longitude: 0">
+
+      <a-entity face-me position="0 4 0">
+
+        <a-plane
+          color="#2A1B5C"
+          width="14"
+          height="5">
+        </a-plane>
+
+        <a-text
+          value="WELCOME C"
+          align="center"
+          color="#FFCE54"
+          width="40"
+          position="0 0 0.1">
+        </a-text>
+
+      </a-entity>
+
+    </a-entity>
+
+  </a-scene>
+
+  <script>
+    // เปิดโหมดจำลองโดยเติม ?sim ใน URL
+    const SIM = new URLSearchParams(location.search).has('sim');
+
+    const hud = document.getElementById('hud');
+    const scene = document.querySelector('a-scene');
+    const cam = document.querySelector('[gps-new-camera]');
+
+    const places = [
+      ...document.querySelectorAll('[gps-new-entity-place]')
+    ];
+
+    let me = null;
+    let accuracy = null;
+
+    // ตั้งค่าพิกัดจำลอง
+    scene.addEventListener('loaded', () => {
+      if (SIM) {
+        const a = places[0].getAttribute(
+          'gps-new-entity-place'
+        );
+
+        setTimeout(() => {
+          cam.setAttribute('gps-new-camera', {
+            simulateLatitude: a.latitude - 0.0003,
+            simulateLongitude: a.longitude + 0.000001
+          });
+        }, 500);
+      }
+    });
+
+    // รับตำแหน่งผู้ใช้
+    cam.addEventListener('gps-camera-update-position', e => {
+      me = e.detail.position;
+    });
+
+    // อ่านความแม่นยำ GPS
+    if (!SIM && navigator.geolocation) {
+      navigator.geolocation.watchPosition(
+        p => {
+          accuracy = p.coords.accuracy;
+        },
+        err => {
+          console.log('GPS Error:', err.message);
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 1000
+        }
+      );
+    }
+
+    // อัปเดตข้อมูลบนหน้าจอทุก 1 วินาที
+    setInterval(() => {
+      if (!me) {
+        hud.innerHTML = SIM
+          ? 'กำลังเริ่มโหมดจำลอง...'
+          : 'กำลังรอตำแหน่ง GPS...';
+        return;
+      }
+
+      const acc = SIM
+        ? 'โหมดจำลอง'
+        : (accuracy !== null
+            ? '± ' + Math.round(accuracy) + ' เมตร'
+            : 'กำลังอ่านค่า');
+
+      const rows = places.map(p => {
+        const component =
+          p.components['gps-new-entity-place'];
+
+        const d = component
+          ? component.distance
+          : undefined;
+
+        return `${p.dataset.name}:
+          <b>${d === undefined
+            ? 'กำลังคำนวณ'
+            : Math.round(d) + ' เมตร'}</b>`;
+      }).join('<br>');
+
+      hud.innerHTML = `
+        ตำแหน่งของฉัน:
+        <b>${me.latitude.toFixed(6)},
+        ${me.longitude.toFixed(6)}</b>
+        <br>
+        ความแม่นยำ GPS: <b>${acc}</b>
+        <br>
+        ${rows}
+      `;
+
+    }, 1000);
+
+  </script>
+
+</body>
+</html>
